@@ -14,8 +14,8 @@
  * available through the out output from the next time step onward.
  * Address space rules:
  * Only the upper 16K+8K+1 words of the Memory chip are used. 
- * Access to address>0x6000 is invalid. Access to any address in 
- * the range 0x4000-0x5FFF results in accessing the screen memory 
+ * Access to address>0x6000 is invalid and reads 0. Access to any address
+ * in the range 0x4000-0x5FFF results in accessing the screen memory 
  * map. Access to address 0x6000 results in accessing the keyboard 
  * memory map. The behavior in these addresses is described in the Screen
  * and Keyboard chip specifications given in the lectures and the book.
@@ -25,5 +25,29 @@ CHIP Memory {
     OUT out[16];
 
     PARTS:
-	//// Replace this comment with your code.
+	
+
+    // Since both the screen and ram will get the input, decide which one gets load if load is high
+    DMux(in=load, sel=address[14], a=loadram, b=loadscreen);
+
+
+    //Map for RAM
+    RAM16K(in=in, load=loadram, address=address[0..13], out=outram);
+    //Map for Screen
+    Screen(in=in, load=loadscreen, address=address[0..12], out=outscreen);
+    //Kbd is ez
+    Keyboard(out=outkbd);
+
+
+    // Determine Output
+
+    //First we'll deal with oob (out of band) issues - ie an address too large is passed.  The highest address is 0b110000000000000 (13 and 14 are set, rest are 0s)
+    //We'll find out if any of address[0..12] are set by ORing them all together
+    Or8Way(in=address[0..7], out=or1);
+    Or8Way(in[0..4]=address[8..12],in[5..7]=false , out=or2); //We don't have 8 pins left, so the rest of them are 0
+    Or(a=or1, b=or2, out=oob); //or the previous outputs.  oob is high if any of the lowest 12 bits are set
+    Mux16(a=outkbd, b=false, sel=oob, out=kbdoob); //If oob is high we'll output 0s, otherwise it's the keyboard
+
+    // Select the final output between ram (if the highest address bit is 0), or screen and kbd/oob 
+    Mux4Way16(a=outram, b=outram, c=outscreen, d=kbdoob, sel=address[13..14], out=out);
 }
